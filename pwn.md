@@ -117,3 +117,30 @@ r.interactive()
 ```
 得到flag
 
+## jarvisoj_level3
+
+>做题人：郑林均
+>url链接：[jarvisoj_level3
+1](https://buuoj.cn/challenges#jarvisoj_level3)
+
+先放入linux用checksec一下，发现是32位的，开启了NX保护，然后放进IDA看看，很容易发现溢出点
+```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  vulnerable_function();
+  write(1, "Hello, World!\n", 0xEu);
+  return 0;
+}
+ssize_t vulnerable_function()
+{
+  char buf[136]; // [esp+0h] [ebp-88h] BYREF
+
+  write(1, "Input:\n", 7u);
+  return read(0, buf, 0x100u);                  // //溢出点
+                                                
+}
+```
+
+
+
+
