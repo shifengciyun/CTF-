@@ -6,7 +6,7 @@
 
 下载文件后放linux用checksec一下
 
-![alt text](图片/图片/image.png)
+![alt text](图片/image.png)
 
 发现32位的，放进IDA看一下
 

@@ -97,7 +97,7 @@ if (isset($_POST['level_3'])) {
 
 ## [BSidesCF 2020]Had a bad day
 
-![ text](图片/image-8.png)
+![alt text](图片/image-8.png)
 
 点击一个发现会有category参数，有可能是伪协议，也可能是sql，先试一下伪协议
 ?category=php:\filter\convert.base64-encode\resource=index.php,发现不能访问，尝试把php去掉，得到代码
