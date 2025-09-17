@@ -180,6 +180,17 @@ r.sendline(payload)
 r.interactive()
 ```
 
+​​ELF​​：加载目标二进制文件，便于获取符号信息
+write_plt:用于获得write函数的plt地址，调用writw函数
+
+write_got：获取write函数的GOT地址，该地址存储了write函数在内存中的实际地址（在第一次调用后由动态链接器填充）。
+
+>main：获取主函数的地址，用于在泄露地址后返回主函数重新执行。
+payload_adr去泄漏write函数的真实地址，返回地址尾write_plt，这样会调用write函数，然后后面是main函数，作为write函数返回后的地址，再次执行mian函数，方便二次调用，然后是调用write函数的参数：fd=1（标准输出），buf=write_got（要泄露的地址），count=4（打印4字节）
+r.recvunti是再收到"Input:\n"时,发送sendline，r.recv(4)接收4字节数据，u32将其转换为整数。
+>LibcSearcher：根据write函数泄漏的地址，查出libc的版本
+>libcbase:即用泄露的write地址减去libc中write函数的偏移得到libc基址。
+>然后通过基址加上libc中system和str_bin_sh（字符串/bin/sh的地址）的偏移得到这两个关键地址
 
 
 
