@@ -140,7 +140,6 @@ payload:         category=php://filter/convert.base64-encode/woofers/resource=fl
 继续查表名
 
 >1';show tables#
-
 ![alt text](image-6.png)
 
 发现FlagHere数据表，其中很有可能有flag
@@ -270,3 +269,4 @@ O:4:"Flag":1:{s:4:"file";s:8:"flag.php";}
 ```
 
 |郑林均|20|100|
+
