@@ -97,7 +97,7 @@ if (isset($_POST['level_3'])) {
 
 ## [BSidesCF 2020]Had a bad day
 
-![alt text](图片/image-8.png)
+![alt text](image-8.png)
 
 点击一个发现会有category参数，有可能是伪协议，也可能是sql，先试一下伪协议
 ?category=php:\filter\convert.base64-encode\resource=index.php,发现不能访问，尝试把php去掉，得到代码
@@ -129,23 +129,23 @@ payload:         category=php:\filter\convert.base64-encode\woofers\resource=fla
 >做题人：郑林均
 >url链接：[[GYCTF2020]Blacklist](https:\buuoj.cn\challenges#[GYCTF2020]Blacklist)
 
-![alt text](图片/image-4.png)
+![alt text](image-4.png)
 可以发现是字符注入，
 首先尝试堆叠注入
 ```
 1';show databases#
 ```
 发现有显示
-![alt text](图片/image-5.png)
+![alt text](image-5.png)
 继续查表名
 
 >1';show tables#
-![alt text](图片/image-6.png)
+![alt text](image-6.png)
 
 发现FlagHere数据表，其中很有可能有flag
 查字段数
 
-![alt text](图片/image-7.png)
+![alt text](image-7.png)
 
 >1'order by 3#
 
