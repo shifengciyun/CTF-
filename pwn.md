@@ -26,7 +26,9 @@ ssize_t vulnerable_function()
 }
 ```
 很容易发现有溢出点buf，read可以读进0x100，而buf只有0x88，再shift加f12，发现bin/sh
+
 ![alt text](image-1.png)
+
 PIE保护没开
 很容易想到ret2libc，查找bin/sh地址，system地址，可以开始构造payload了
 
@@ -97,8 +99,11 @@ __int64 __fastcall main(int a1, char **a2, char **a3)
 发现溢出点，用了gets函数，输入没有限制
 然后找获得权限的函数
 用shift+f12查看
+
 ![alt text](image-3.png)
+
 发现有cat flag.txt
+
 就用这个来获得flag
 现在可以开始构造payload了
 ```python

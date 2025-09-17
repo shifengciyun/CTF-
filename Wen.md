@@ -136,16 +136,17 @@ payload:         category=php:\filter\convert.base64-encode\woofers\resource=fla
 1';show databases#
 ```
 发现有显示
+
 ![alt text](image-5.png)
 继续查表名
 
 >1';show tables#
-![alt text](image-6.png)
+![image-6.png](image-6.png)
 
 发现FlagHere数据表，其中很有可能有flag
 查字段数
 
-![alt text](image-7.png)
+![image-7.png](image-7.png)
 
 >1'order by 3#
 
