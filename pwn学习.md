@@ -48,7 +48,7 @@ lea：Load effective address lea rax，[rbp-0x18]   #rax=[rbp-0x18]
 xor: xor ebx,ebx  #使ebx=0，有影响标志寄存器的副作用，mov没有 
 cmp:al,0x61 #al-0x61
 sub:al,0x61 #al=al-0x61
-
+test eax,eax 就是 eax&eax 可以看作 cmp eax,0
 
 0-255
 8       16     32     64
