@@ -69,3 +69,5 @@ Code Segm![alt text](image-10.png)ent）
 第二次调用这个外部函数时，程序仍然首先通过 PLT 表跳转到 GOT 表，此时 GOT 表已经存有获取函数的内存地址，所以会直接跳转到函数所在地址执行函数。
 
 ![alt text](image-12.png)
+
+Ropgadget --binary filename --only "pop|ret"
