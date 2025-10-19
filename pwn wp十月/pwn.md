@@ -481,3 +481,88 @@ context(os='linux', arch='amd64', log_level='debug')
 ```
 
 有些shellcode题目会限制shellcode的输入，这时候就要自己去生成具体看[这个](https://blog.csdn.net/SmalOSnail/article/details/105236336)
+
+
+# ezfmt
+>格式化漏洞
+
+格式转换
+
+格式化字符串是由普通字符（包括%）和转换规则构成的字符序列。普通字符被原封不动地复制到输出流中。转换规则根据与实参对应的转换指示符对其进行转换，然后将结果写入到输出流中。
+
+转换规则由可选的部分和必选部分组成。其中只有转换指示符type是必选部分，用来表示转换类型。
+
+用 printf() 为例，它的第一个参数就是格式化字符串 ：“Color %s,Number %d,Float %4.2f”
+
+然后 printf 函数会根据这个格式化字符串来解析对应的其他参数
+```
+%d - 十进制 - 输出十进制整数
+
+%s - 字符串 - 从内存中读取字符串
+
+%x - 十六进制 - 输出十六进制数
+
+%c - 字符 - 输出字符
+
+%p - 指针 - 指针地址
+
+%n - 到目前为止所写的字符数
+
+%hhn - 写1字节
+
+%hn - 写2字节
+
+%ln - 写4个字节
+
+%lln - 写8字节
+```
+```
+格式化字符串中还存在一个不怎么常用的”%n“，该占位符不用于输出，而是将”当前已打印的字符数写入%n所对应的地址参数中“
+如果n缺少参数，就会把打印的字符数输入到上一个地址中
+
+同时，还可以用”%?$p“来指示该占位符使用第?个参数
+
+有了上述两个占位符，我们就能达成”任意地址读写“这一严重的结果
+
+因为我们只需要将”期望写入的地址+填充+%?$n“传入，就能往任何地方写入任意数了
+
+类比例题，如果我们将printf的got表修改为system，再传入”/bin/sh“，就变相执行了
+
+system("/bin/sh")
+```
+```
+ n$，获取格式化字符串中的指定参数，比如%6$p表示从当前地址数起，获取往后偏移第6个字节长度的地址，类似于"%p%p%p%p%p%p"，但是前五个"%p"不会生效
+ 但是需要注意64位程序，前6个参数是存在寄存器中的，从第7个参数开始才会出现在栈中，所以栈中从格式化串开始的第一个，应该是%7$n
+ 如图所示
+ ```
+代码：
+```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  char buf[256]; // [rsp+0h] [rbp-110h] BYREF
+  void *v5; // [rsp+100h] [rbp-10h]
+  int fd; // [rsp+10Ch] [rbp-4h]
+
+  setbuf(stdin, 0LL);
+  setbuf(stderr, 0LL);
+  setbuf(stdout, 0LL);
+  puts("Welcome to the world of fmtstr");
+  puts("> ");
+  fd = open("flag", 0);
+  if ( fd == -1 )
+    perror("Open failed.");
+  read(fd, &name, 0x30uLL);
+  v5 = &name;
+  puts("Input your format string.");
+  read(0, buf, 0x100uLL);
+  puts("Ok.");
+  printf(buf);
+  return 0;
+}
+```
+可以看到它想要·打开·一个flag文件，然后写入到name中，很明显后面的printf有字符串漏洞，通过写入aaaa %p %p %p %p %p %p %p %p %p %p
+发现偏移量为6，然后应该动态调试，创建一个flag文件，随便输入个flag，在主函数设置断点，然后ni一步步调试，发现
+![alt text](image-6.png)
+然后使用fmt +地址获得偏移量求取
+![alt text](image-7.png)
+发现是38

