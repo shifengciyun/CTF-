@@ -547,6 +547,7 @@ __str__()
 
 # [HZNUCTF 2023 preliminary]guessguessguess
 
+>rce
 ![alt text](image-11.png)
 ![alt text](image-12.png)
 先输入一个ls发现返回sl，那就是倒置了，那可以尝试一下
