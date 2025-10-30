@@ -545,3 +545,17 @@ __str__()
 
 
 
+# [HZNUCTF 2023 preliminary]guessguessguess
+
+![alt text](image-11.png)
+![alt text](image-12.png)
+先输入一个ls发现返回sl，那就是倒置了，那可以尝试一下
+)'/ sl'(metsys，发现没有任何反应
+看wp说是ping
+ping一个127.0.0.1
+![alt text](image-13.png)
+发现猜猜猜没了，使用管道符看看目录
+/ sl||1.0.0.721
+没有发现目录
+![alt text](image-14.png)
+说是在环境变量中，就是可以看看env
